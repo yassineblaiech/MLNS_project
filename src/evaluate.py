@@ -47,7 +47,9 @@ def plot_confusion_matrix(y_true, y_pred, dataset_name, model_name):
     plt.close()
 
 def plot_tsne_embeddings(embeddings, labels, dataset_name, model_name):
-    """Reduces embeddings to 2D using t-SNE and plots them colored by community."""
+    if embeddings.shape[1] < 2:
+        return
+
     tsne = TSNE(n_components=2, random_state=42, init='pca', learning_rate='auto')
     emb_2d = tsne.fit_transform(embeddings)
     
