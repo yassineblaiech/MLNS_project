@@ -1,104 +1,162 @@
 # Graph Transformer for Community Detection
 
-This project compares the performance of Graph Transformers with traditional Graph Neural Networks (GNNs) like GCN and GAT for community detection tasks on graph datasets.
+This project benchmarks a graph transformer against two standard graph neural network baselines, `GCN` and `GAT`, for node-level community detection.
 
-## What is Community Detection?
+The current experiment suite runs on:
+- `Cora`
+- `CiteSeer`
+- `Ego-Facebook`
 
-Community detection is the process of identifying groups (communities) of nodes in a network that are more densely connected to each other than to the rest of the network. This is useful in social networks, citation networks, and other graph-structured data to understand underlying structures and relationships.
+For the citation datasets, the task is node classification using the dataset labels. For `Ego-Facebook`, the project builds a community-detection benchmark by generating pseudo ground-truth communities with the Louvain algorithm, then training the models to predict those community assignments.
 
-## Project Overview
+## Project Goal
 
-This project implements and evaluates:
-- **Graph Transformer**: A lightweight transformer-based model adapted for graphs, using Laplacian Positional Encodings and local attention mechanisms for efficiency.
-- **GCN (Graph Convolutional Network)**: A traditional message-passing GNN.
-- **GAT (Graph Attention Network)**: An attention-based GNN that weighs neighbor importance.
+We wanted to test whether a transformer-style graph model with Laplacian positional encodings can compete with classic message-passing GNNs on community-structured graphs, while also producing useful qualitative diagnostics such as confusion matrices and t-SNE projections.
 
-The models are tested on citation network datasets where:
-- Nodes represent academic papers
-- Edges represent citations between papers
-- Node labels represent research topics (communities)
+## Implemented Models
 
-## Features
+- `GCN`: graph convolution baseline from Kipf and Welling
+- `GAT`: graph attention baseline
+- `GraphTransformer`: transformer-based graph model built with `TransformerConv`, residual connections, layer normalization, and Laplacian positional encodings
 
-- Implementation of Graph Transformer with O(E) complexity (efficient for large graphs)
-- Laplacian Positional Encodings for structural information
-- Comparison with baseline GNN models
-- Evaluation on Cora and CiteSeer datasets
-- Performance metrics: Accuracy, Macro F1, Normalized Mutual Information (NMI)
-- GPU memory tracking and timing analysis
+## Current Pipeline
+
+1. Load a dataset with normalized node features.
+2. Compute Laplacian positional encodings (`k=16`) for every graph.
+3. For `Ego-Facebook`, generate community labels with Louvain and create a `60/20/20` train/validation/test split.
+4. Train each model for `1500` epochs using `AdamW`.
+5. Evaluate on the test mask with accuracy, macro F1, and NMI.
+6. Save aggregate results to `results.csv`.
+7. Export a confusion matrix and t-SNE plot for every dataset/model pair into `results/plots/`.
+
+## Repository Layout
+
+```text
+Graph-Transformer-CD/
+|-- src/
+|   |-- config.py
+|   |-- train.py
+|   |-- evaluate.py
+|   |-- utils.py
+|   |-- data/
+|   |   `-- loader.py
+|   `-- models/
+|       |-- baselines.py
+|       `-- transformer.py
+|-- results/
+|   `-- plots/
+|-- docs/
+|   `-- Project_Proposal___MLNS.pdf
+|-- run_all.py
+|-- results.csv
+|-- requirements.txt
+`-- README.md
+```
 
 ## Installation
 
-1. Clone this repository:
-   ```bash
-   git clone <repository-url>
-   cd Graph-Transformer-CD
-   ```
+```bash
+git clone <repository-url>
+cd Graph-Transformer-CD
+pip install -r requirements.txt
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+This project depends on PyTorch Geometric. If your environment does not already support it, install the matching PyG wheels for your local PyTorch and CUDA/CPU setup before running experiments.
 
-   **Note**: This project requires PyTorch Geometric. If you encounter installation issues, refer to the [PyTorch Geometric installation guide](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html).
+## Running Experiments
 
-## Usage
+Run the full benchmark:
 
-Run all experiments:
 ```bash
 python run_all.py
 ```
 
-This will train and evaluate all models on the Cora and CiteSeer datasets. Results will be saved to `results.csv` and plots will be generated in the `results/plots/` directory.
+This will:
+- train `GCN`, `GAT`, and `GraphTransformer`
+- process `Cora`, `CiteSeer`, and `Ego-Facebook`
+- overwrite `results.csv`
+- generate plots in `results/plots/`
 
-## Datasets
+## Default Configuration
 
-- **Cora**: A citation network with 2,708 nodes, 5,429 edges, and 7 classes
-- **CiteSeer**: A citation network with 3,312 nodes, 4,723 edges, and 6 classes
+The experiment defaults in `src/config.py` are:
 
-## Results
+```python
+DATASETS = ["Cora", "CiteSeer", "Ego-Facebook"]
+MODELS = ["GCN", "GAT", "GraphTransformer"]
 
-The project evaluates models based on:
-- **Accuracy**: Percentage of correctly classified nodes
-- **Macro F1**: Balanced measure of precision and recall across classes
-- **NMI**: Normalized Mutual Information measuring clustering quality
-- **Training Time**: Time per epoch
-- **GPU Memory Usage**: Peak memory consumption
-
-Example results (may vary based on hyperparameters):
-- GCN and GAT typically achieve higher accuracy (70-80%) compared to Graph Transformer
-- Graph Transformer shows competitive performance with potentially better scalability for larger graphs
-
-## Project Structure
-
-```
-├── src/
-│   ├── config.py          # Hyperparameters and model configurations
-│   ├── data/
-│   │   └── loader.py      # Dataset loading utilities
-│   ├── models/
-│   │   ├── baselines.py   # GCN and GAT implementations
-│   │   └── transformer.py # Graph Transformer implementation
-│   ├── train.py           # Training functions
-│   ├── evaluate.py        # Evaluation and plotting
-│   └── utils.py           # Helper functions
-├── data/                  # Dataset storage
-├── results/               # Output results and plots
-├── run_all.py             # Main execution script
-├── requirements.txt       # Python dependencies
-└── README.md
+HYPERPARAMETERS = {
+    "learning_rate": 1e-4,
+    "weight_decay": 1e-3,
+    "epochs": 1500,
+    "k_eigenvectors": 16,
+    "hidden_dim": 64,
+    "num_layers": 2,
+    "num_heads": 4
+}
 ```
 
-## Contributing
+## Dataset Notes
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+### Cora and CiteSeer
 
-## License
+- Loaded with `torch_geometric.datasets.Planetoid`
+- Use the standard node labels provided by the datasets
+- Feature normalization is applied during loading
 
-This project is licensed under the MIT License.
+### Ego-Facebook
+
+- Loaded with `torch_geometric.datasets.SNAPDataset`
+- Community labels are generated with NetworkX Louvain clustering
+- Random train/validation/test masks are created inside the loader
+- If node features are missing, node degree is used as a fallback feature
+
+This makes `Ego-Facebook` a structurally driven benchmark rather than a native labeled node-classification dataset.
+
+## Evaluation Metrics
+
+- `Accuracy`: percentage of correct node predictions on the test split
+- `Macro_F1`: class-balanced F1 score
+- `NMI`: normalized mutual information between predicted and target communities
+- `Time/Epoch (s)`: average training time per epoch
+- `Peak GPU Mem (MB)`: peak allocated GPU memory; this is `0.0` on CPU runs
+
+## Current Results
+
+The latest committed results in `results.csv` are:
+
+| Dataset | Model | Accuracy | Macro F1 | NMI | Time / Epoch (s) | Peak GPU Mem (MB) |
+|---|---|---:|---:|---:|---:|---:|
+| Cora | GCN | 0.7850 | 0.7791 | 0.5815 | 0.0306 | 0.0 |
+| Cora | GAT | 0.7810 | 0.7785 | 0.5634 | 0.1300 | 0.0 |
+| Cora | GraphTransformer | 0.5060 | 0.4656 | 0.2381 | 0.0965 | 0.0 |
+| CiteSeer | GCN | 0.6900 | 0.6533 | 0.4267 | 0.0522 | 0.0 |
+| CiteSeer | GAT | 0.6700 | 0.6454 | 0.3945 | 0.1882 | 0.0 |
+| CiteSeer | GraphTransformer | 0.5120 | 0.4927 | 0.2226 | 0.1148 | 0.0 |
+| Ego-Facebook | GCN | 0.5714 | 0.2668 | 0.3834 | 0.0115 | 0.0 |
+| Ego-Facebook | GAT | 0.7571 | 0.5734 | 0.6418 | 0.0355 | 0.0 |
+| Ego-Facebook | GraphTransformer | 0.8571 | 0.8804 | 0.7498 | 0.0409 | 0.0 |
+
+## Result Takeaways
+
+- On `Cora` and `CiteSeer`, the classic baselines outperform the graph transformer in this configuration.
+- On `Ego-Facebook`, the `GraphTransformer` performs best across accuracy, macro F1, and NMI.
+- The transformer appears to benefit more on the structurally defined community task than on the citation benchmarks.
+
+## Generated Artifacts
+
+For every dataset/model pair, the project saves:
+- a confusion matrix PNG
+- a t-SNE visualization of node embeddings
+
+Examples already included in the repo:
+- `results/plots/Cora_GCN_confusion_matrix.png`
+- `results/plots/Cora_GraphTransformer_tsne.png`
+- `results/plots/Ego-Facebook_GAT_confusion_matrix.png`
+- `results/plots/Ego-Facebook_GraphTransformer_tsne.png`
 
 ## References
 
-- Dwivedi, V. P., & Bresson, X. (2021). A Generalization of Transformer Networks to Graphs. arXiv preprint arXiv:2012.09699.
-- Kipf, T. N., & Welling, M. (2016). Semi-supervised classification with graph convolutional networks. arXiv preprint arXiv:1609.02907.
-- Veličković, P., et al. (2017). Graph attention networks. arXiv preprint arXiv:1710.10903.
+- Dwivedi, V. P., and Bresson, X. "A Generalization of Transformer Networks to Graphs."
+- Kipf, T. N., and Welling, M. "Semi-Supervised Classification with Graph Convolutional Networks."
+- Velickovic, P., et al. "Graph Attention Networks."
